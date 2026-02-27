@@ -20,13 +20,14 @@
     /* 縦長ステージ */
     #stage {
       position: relative;
-      width: min(92vw, 430px);
+      width: min(84vw, 340px);
       aspect-ratio: 9 / 16;
       background: white;
       border: 1px solid #ddd;
       border-radius: 12px;
       overflow: hidden;
       touch-action: none;
+      --partScale: 0.70;
     }
 
     /* パーツ置き場 */
@@ -56,6 +57,8 @@
       touch-action: none;
       cursor: grab;
       z-index: 10;
+      transform: scale(var(--partScale));
+      transform-origin: top left;
     }
     .part:active { cursor: grabbing; }
 
