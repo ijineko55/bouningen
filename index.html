@@ -177,6 +177,16 @@
     p.el.style.zIndex = String(p.z);
   }
 
+  function updatePartScale() {
+    const r = stage.getBoundingClientRect();
+
+    // 幅に応じて縮小（スマホほど小さく）
+    // 例：幅340pxならだいたい0.65前後になる
+    const scale = Math.max(0.55, Math.min(0.85, r.width / 520));
+
+    stage.style.setProperty('--partScale', scale.toFixed(3));
+  }
+
   function getAnchorWorld(def) {
     const p = parts.get(def.id);
     const w = p.el.getBoundingClientRect().width;
@@ -414,6 +424,7 @@
   }
 
   function refreshAll() {
+    updatePartScale();
     targets = computeTargets();
     placePartsInTray();
     refreshDots();
