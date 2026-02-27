@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>棒人間をつくれ！</title>
+  <style>
+    html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
+    .app { height: 100%; display: grid; grid-template-rows: 1fr auto; background: #f7f7f7; }
+    #stage {
+      position: relative;
+      overflow: hidden;
+      background: white;
+      border-bottom: 1px solid #ddd;
+      touch-action: none; /* ←スマホで必須 */
+    }
+    .hud {
+      display: flex; gap: 8px; align-items: center; padding: 10px;
+      background: #fafafa;
+    }
+    button { padding: 8px 12px; }
+    #msg { margin-left: auto; font-size: 14px; color: #333; }
+
+    .part {
+      position: absolute;
+      left: 0; top: 0;
+      user-select: none;
+      -webkit-user-drag: none;
+      touch-action: none;
+      cursor: grab;
+    }
+    .part:active { cursor: grabbing; }
+
+    /* デバッグ用ターゲット点 */
+    .dot {
+      position: absolute;
+      width: 10px; height: 10px;
+      border-radius: 999px;
+      transform: translate(-5px,-5px);
+      background: rgba(0, 200, 0, 0.35);
+      pointer-events: none;
+      display: none;
+    }
+    .debug .dot { display: block; }
+
+    /* アンカー点（赤） */
+    .dot.anchor {
+      background: rgba(255, 0, 0, 0.35);
+    }
+    .debug .adot { display:block; }
+
+    /* クリア演出 */
+    #overlay {
+      position: absolute; inset: 0;
+      display: none;
+      align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.85);
+      text-align: center;
+    }
+    #overlay.show { display: flex; }
+    #overlay h1 { margin: 0 0 6px; font-size: 28px; }
+    #overlay p { margin: 0; font-size: 16px; }
+    .panel { padding: 18px 20px; border: 1px solid #ddd; background: white; border-radius: 12px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div id="stage">
+    <div id="overlay">
+      <div class="panel">
+        <h1 id="clearTitle">クリア！</h1>
+        <p id="clearDesc">称号：？？？</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud">
+    <button id="btnReset">リセット</button>
+    <button id="btnDebug">ガイド(デバッグ)</button>
+    <div id="msg">ドラッグして棒人間を作れ！</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const overlay = document.getElementById('overlay');
+  const clearTitle = document.getElementById('clearTitle');
+  const clearDesc = document.getElementById('clearDesc');
+  const msg = document.getElementById('msg');
+
+  const TOLERANCE = 30;      // クリア許容誤差
+  const SNAP_RADIUS = 60;    // 吸い付き半径（好みで調整）
+
+  // 画像内アンカー（0〜1の相対座標） ※必要ならここを微調整
+  const partsDef = [
+    { id: 'head',      src: 'head.png',      anchorRel: {x:0.5,  y:0.95} },
+    { id: 'body',      src: 'body.png',      anchorRel: {x:0.5,  y:0.05} },
+    { id: 'arm_left',  src: 'arm_left.png',  anchorRel: {x:0.18, y:0.28} },
+    { id: 'arm_right', src: 'arm_right.png', anchorRel: {x:0.82, y:0.68} },
+    { id: 'foot_left', src: 'foot_left.png', anchorRel: {x:0.92, y:0.22} },
+    { id: 'foot_right',src: 'foot_right.png',anchorRel: {x:0.08, y:0.30} },
+  ];
+
+  // ターゲット点（ステージ基準点 neck からの相対）
+  function computeTargets() {
+    const r = stage.getBoundingClientRect();
+    // 首（基準点）：少し上寄りにして、脚が入る余白を確保
+    const neck = { x: r.width / 2, y: r.height / 2 - 60 };
+
+    return {
+      head:       { x: neck.x,        y: neck.y },
+      body:       { x: neck.x,        y: neck.y },
+      arm_left:   { x: neck.x - 85,   y: neck.y + 55 },
+      arm_right:  { x: neck.x + 85,   y: neck.y + 55 },
+      foot_left:  { x: neck.x - 55,   y: neck.y + 250 },
+      foot_right: { x: neck.x + 55,   y: neck.y + 250 },
+    };
+  }
+
+  // 実体パーツ
+  const parts = new Map(); // id -> {el, x, y, placed}
+  let targets = computeTargets();
+
+  // デバッグ用ターゲット点表示
+  const targetDots = new Map(); // id -> dotEl
+  function refreshTargetDots() {
+    targets = computeTargets();
+    for (const def of partsDef) {
+      const dot = targetDots.get(def.id);
+      if (!dot) continue;
+      dot.style.left = targets[def.id].x + 'px';
+      dot.style.top  = targets[def.id].y + 'px';
+    }
+  }
+
+  function refreshAnchorDots() {
+    for (const def of partsDef) {
+      const adot = anchorDots.get(def.id);
+      if (!adot) continue;
+      const a = getAnchorWorld(def);
+      adot.style.left = a.x + 'px';
+      adot.style.top  = a.y + 'px';
+    }
+  }
+
+  const anchorDots = new Map(); // id -> dotEl（アンカー点）
+
+  function createPart(def) {
+    const el = new Image();
+    el.src = def.src;
+    el.className = 'part';
+    el.dataset.id = def.id;
+
+    // 読み込み後、初期配置
+    el.onload = () => {
+      // 画面下に横並び（互いに重ならない）
+      const r = stage.getBoundingClientRect();
+      const idx = partsDef.findIndex(p => p.id === def.id);
+      const padding = 18;
+      const y = r.height - 140;
+      const x = padding + idx * 140;
+
+      const p = parts.get(def.id);
+      p.x = Math.min(x, r.width - el.width - 10);
+      p.y = Math.max(10, y);
+      applyPos(def.id);
+      refreshTargetDots();
+      evaluate(); // 初期表示更新
+    };
+
+    // ターゲット点
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    stage.appendChild(dot);
+    targetDots.set(def.id, dot);
+
+    // アンカー点（赤）
+    const adot = document.createElement('div');
+    adot.className = 'dot anchor';
+    stage.appendChild(adot);
+    anchorDots.set(def.id, adot);
+
+    stage.appendChild(el);
+    parts.set(def.id, { el, x: 0, y: 0, placed: false, z: 1 });
+
+    attachDrag(def);
+  }
+
+  function applyPos(id) {
+    const p = parts.get(id);
+    p.el.style.left = p.x + 'px';
+    p.el.style.top  = p.y + 'px';
+    p.el.style.zIndex = String(p.z);
+  }
+
+  function getAnchorWorld(def) {
+    const p = parts.get(def.id);
+    const w = p.el.getBoundingClientRect().width;
+    const h = p.el.getBoundingClientRect().height;
+    return {
+      x: p.x + w * def.anchorRel.x,
+      y: p.y + h * def.anchorRel.y,
+    };
+  }
+
+  function setAnchorToTarget(def, tx, ty) {
+    const p = parts.get(def.id);
+    const w = p.el.getBoundingClientRect().width;
+    const h = p.el.getBoundingClientRect().height;
+    p.x = tx - w * def.anchorRel.x;
+    p.y = ty - h * def.anchorRel.y;
+    applyPos(def.id);
+  }
+
+  function dist(a, b) {
+    const dx = a.x - b.x, dy = a.y - b.y;
+    return Math.hypot(dx, dy);
+  }
+
+  let zTop = 10;
+
+  function attachDrag(def) {
+    const p = parts.get(def.id);
+    let dragging = false;
+    let grab = { dx: 0, dy: 0 };
+
+    p.el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      dragging = true;
+      p.el.setPointerCapture(e.pointerId);
+      p.z = ++zTop;
+      applyPos(def.id);
+
+      const stageRect = stage.getBoundingClientRect();
+      const px = e.clientX - stageRect.left;
+      const py = e.clientY - stageRect.top;
+      grab.dx = px - p.x;
+      grab.dy = py - p.y;
+    });
+
+    p.el.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const stageRect = stage.getBoundingClientRect();
+      const px = e.clientX - stageRect.left;
+      const py = e.clientY - stageRect.top;
+
+      p.x = px - grab.dx;
+      p.y = py - grab.dy;
+
+      // 盤面外に行かないよう軽く制限（好み）
+      const w = p.el.getBoundingClientRect().width;
+      const h = p.el.getBoundingClientRect().height;
+      p.x = Math.max(-w * 0.4, Math.min(stageRect.width - w * 0.6, p.x));
+      p.y = Math.max(-h * 0.4, Math.min(stageRect.height - h * 0.6, p.y));
+
+      applyPos(def.id);
+      evaluate(false);
+    });
+
+    p.el.addEventListener('pointerup', () => {
+      if (!dragging) return;
+      dragging = false;
+
+      const a = getAnchorWorld(def);
+      const t = targets[def.id];
+      const d = dist(a, t);
+
+      // スナップ
+      if (d <= SNAP_RADIUS) {
+        setAnchorToTarget(def, t.x, t.y);
+      }
+
+      evaluate(true);
+    });
+  }
+
+  function grade(totalDist) {
+    // だいたいの距離合計で称号を決める（意味不明でOK）
+    if (totalDist <= 10)  return '国宝級で賞';
+    if (totalDist <= 40)  return 'すばらしい芸術で賞';
+    if (totalDist <= 90)  return 'それっぽいで賞';
+    if (totalDist <= 160) return '未知の生命体で賞';
+    return 'トイレットペーパー級で賞';
+  }
+
+  function evaluate(showClearIfAny = false) {
+    let totalDist = 0;
+    let okCount = 0;
+
+    for (const def of partsDef) {
+      const a = getAnchorWorld(def);
+      const t = targets[def.id];
+      const d = dist(a, t);
+      totalDist += d;
+      if (d <= TOLERANCE) okCount++;
+    }
+
+    const isClear = okCount === partsDef.length;
+
+    const title = grade(totalDist);
+    msg.textContent = `判定OK: ${okCount}/${partsDef.length}　|　称号候補: ${title}`;
+
+    if (isClear && showClearIfAny) {
+      clearTitle.textContent = 'できた！！！！';
+      clearDesc.textContent = `称号：${title}（誤差合計 ${Math.round(totalDist)}px）`;
+      overlay.classList.add('show');
+    } else {
+      refreshAnchorDots();
+      overlay.classList.remove('show');
+    }
+  }
+
+  // ボタン類
+  document.getElementById('btnReset').addEventListener('click', () => {
+    overlay.classList.remove('show');
+    // 初期配置に戻す（画像ロード後の処理を再現）
+    const r = stage.getBoundingClientRect();
+    partsDef.forEach((def, idx) => {
+      const p = parts.get(def.id);
+      const el = p.el;
+      const padding = 18;
+      const y = r.height - 140;
+      const x = padding + idx * 140;
+      p.x = Math.min(x, r.width - el.getBoundingClientRect().width - 10);
+      p.y = Math.max(10, y);
+      p.z = ++zTop;
+      applyPos(def.id);
+    });
+    refreshTargetDots();
+    evaluate(true);
+  });
+
+  document.getElementById('btnDebug').addEventListener('click', () => {
+    document.body.classList.toggle('debug');
+    refreshTargetDots();
+  });
+
+  window.addEventListener('resize', () => {
+    refreshTargetDots();
+    evaluate(false);
+  });
+
+  // 起動
+  partsDef.forEach(createPart);
+  refreshTargetDots();
+})();
+</script>
+</body>
+</html>
