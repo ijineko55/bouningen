@@ -46,7 +46,7 @@
       left: 0; top: 0;
       pointer-events: none;
       user-select: none;
-      z-index: 30; /* headより上に表示したいので高め */
+      z-index: 5; /* headより上に表示したいので高め */
     }
 
     .part {
@@ -180,7 +180,7 @@
   function updatePartScale() {
     const r = stage.getBoundingClientRect();
     const playH = r.height - TRAY_H;
-    const margin = 12; // 端の余白（好み）
+    const margin = 20; // 端の余白（好み）
 
     // まずターゲット（完成形の配置）を仮に作る
     const tmap = computeTargets();
@@ -251,13 +251,25 @@
   function layoutFixedFace() {
     const r = stage.getBoundingClientRect();
 
-    // 重要：拡大しない（naturalWidth を上限にする）
+    // face の元サイズ
     const naturalW = faceEl.naturalWidth || 0;
     const naturalH = faceEl.naturalHeight || 0;
 
-    // 表示幅：ステージ幅の90%まで。ただし naturalW を超えて拡大しない
-    const maxW = r.width * 0.90;
-    const displayW = naturalW > 0 ? Math.min(maxW, naturalW) : maxW;
+    // いまのパーツ縮小率（--partScale）
+    const scaleStr = getComputedStyle(stage).getPropertyValue('--partScale');
+    const partScale = parseFloat(scaleStr) || 1;
+
+    // head.png の “表示サイズ” を基準に face を決める（ここが肝）
+    const headEl = parts.get('head')?.el;
+    const headBaseW = (headEl && headEl.naturalWidth) ? headEl.naturalWidth * partScale : r.width * 0.55;
+
+    // face の幅 = head幅 × 係数（小さくしたければここを下げる）
+    const FACE_TO_HEAD = 0.60; // ← 0.60 〜 0.80 で調整おすすめ
+    const targetW = headBaseW * FACE_TO_HEAD;
+
+    // 画面の幅も上限にする（ただし拡大はしない）
+    const maxW = Math.min(r.width * 0.80, targetW);
+    const displayW = (naturalW > 0) ? Math.min(maxW, naturalW) : maxW;
 
     faceEl.style.width = Math.round(displayW) + 'px';
     faceEl.style.height = 'auto';
@@ -268,11 +280,11 @@
 
     // 上部中央に固定
     const x = (r.width - displayW) / 2;
-    const y = 12; // 上余白
+    const y = 12;
     faceEl.style.left = Math.round(x) + 'px';
     faceEl.style.top  = Math.round(y) + 'px';
 
-    // faceの「中心点」（ステージ座標系）を返す
+    // face の中心点（ターゲット計算用）
     return {
       x: x + displayW * FACE_CENTER_REL.x,
       y: y + displayH * FACE_CENTER_REL.y,
