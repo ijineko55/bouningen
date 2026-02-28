@@ -101,9 +101,13 @@
       pointer-events: none;
     }
     #overlay.show { display: flex; }
-    .panel { padding: 18px 20px; border: 1px solid #ddd; background: white; border-radius: 12px; }
+    .panel { padding: 18px 20px; border: 1px solid #ddd; background: white; border-radius: 12px; pointer-events: auto; }
+    #btnOk { margin-top: 10px; padding: 8px 14px; }
     #overlay h1 { margin: 0 0 6px; font-size: 28px; }
     #overlay p  { margin: 0; font-size: 16px; }
+    #overlay .panel {
+      transform: translateY(80px); /* 数字を増やすほど下に移動 */
+    }
   </style>
 </head>
 
@@ -119,6 +123,7 @@
       <div class="panel">
         <h1 id="clearTitle">できた！！！！</h1>
         <p id="clearDesc">称号：？？？</p>
+        <button id="btnOk" type="button">OK</button>
       </div>
     </div>
   </div>
@@ -500,6 +505,13 @@
     overlay.classList.remove('show');
     refreshAll();
   });
+
+  const btnOk = document.getElementById('btnOk');
+  if (btnOk) {
+    btnOk.addEventListener('click', () => {
+      overlay.classList.remove('show');
+    });
+  }
 
   const btnDebug = document.getElementById('btnDebug');
   if (btnDebug) {
