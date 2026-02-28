@@ -471,6 +471,9 @@
     el.className = 'part';
     el.dataset.id = def.id;
 
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    el.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+
     parts.set(def.id, { el, x: 0, y: 0, z: ++zTop });
 
     const td = document.createElement('div');
