@@ -90,6 +90,16 @@
     .dot.anchor { background: rgba(255, 0, 0, 0.35); }
     .debug .dot { display: block; }
 
+    #msg.bump {
+      animation: bump 0.25s ease-out;
+    }
+
+    @keyframes bump {
+      0%   { transform: scale(1); }
+      50%  { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
     /* クリア演出 */
     #overlay {
       position: absolute; inset: 0;
@@ -146,6 +156,9 @@
   const clearTitle = document.getElementById('clearTitle');
   const clearDesc  = document.getElementById('clearDesc');
   const msg = document.getElementById('msg');
+
+  let lastOkCount = -1;
+  let lastTitle = '';
 
   const TOLERANCE = 30;     // クリア許容誤差
   const SNAP_RADIUS = 60;   // 吸い付き半径
@@ -394,6 +407,18 @@
     const isClear = okCount === partsDef.length;
     const title = gradeByOkCount(okCount); // ★これが必要
 
+  if (okCount !== lastOkCount || title !== lastTitle) {
+    lastOkCount = okCount;
+    lastTitle = title;
+
+    msg.classList.remove('bump', 'flash');
+    // reflow（アニメを毎回確実に再生）
+    void msg.offsetWidth;
+    msg.classList.add('bump', 'flash');
+
+    setTimeout(() => msg.classList.remove('flash'), 250);
+  }
+
     // 0/6 のときは称号を出さない
     if (title) {
       msg.textContent = `判定OK: ${okCount}/${partsDef.length}　|　${title}`;
@@ -535,4 +560,3 @@
 </script>
 </body>
 </html>
-
