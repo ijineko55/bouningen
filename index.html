@@ -152,11 +152,11 @@
   // headは“中心合わせ”が扱いやすいので anchorRel=0.5,0.5 にしています
   const partsDef = [
     { id: 'head',       src: 'head.png',       anchorRel: {x:0.5,  y:0.5} },
-    { id: 'body',       src: 'body.png',       anchorRel: {x:0.5,  y:0.05} },
-    { id: 'arm_left',   src: 'arm_left.png',   anchorRel: {x:0.18, y:0.28} },
-    { id: 'arm_right',  src: 'arm_right.png',  anchorRel: {x:0.82, y:0.68} },
-    { id: 'foot_left',  src: 'foot_left.png',  anchorRel: {x:0.92, y:0.22} },
-    { id: 'foot_right', src: 'foot_right.png', anchorRel: {x:0.08, y:0.30} },
+    { id: 'body',       src: 'body.png',       anchorRel: {x:0.5,  y:0.50} },
+    { id: 'arm_left',   src: 'arm_left.png',   anchorRel: {x:0.45, y:1.68} },
+    { id: 'arm_right',  src: 'arm_right.png',  anchorRel: {x:0.50, y:1.08} },
+    { id: 'foot_left',  src: 'foot_left.png',  anchorRel: {x:0.72, y:1.55} },
+    { id: 'foot_right', src: 'foot_right.png', anchorRel: {x:0.28, y:1.99} },
   ];
 
   const parts = new Map();       // id -> {el, x, y, z}
@@ -495,7 +495,7 @@
   });
 
   window.addEventListener('resize', () => {
-    refreshAll();
+    updatePartScale();
   });
 
   // 起動
