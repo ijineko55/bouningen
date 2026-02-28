@@ -95,9 +95,10 @@
       position: absolute; inset: 0;
       display: none;
       align-items: center; justify-content: center;
-      background: rgba(255,255,255,0.85);
+      background: transparent;
       text-align: center;
       z-index: 999;
+      pointer-events: none;
     }
     #overlay.show { display: flex; }
     .panel { padding: 18px 20px; border: 1px solid #ddd; background: white; border-radius: 12px; }
@@ -124,8 +125,9 @@
 
   <div class="hud">
     <button id="btnReset">リセット</button>
-    <button id="btnDebug">ガイド</button>
-    <div id="msg">ドラッグして棒人間を作れ！</div>
+    <!-- ガイドボタン  -->
+    <!-- <button id="btnDebug">ガイド</button>  -->
+    <div id="msg">ドラッグして棒人間を作ろう！</div>
   </div>
 </div>
 
@@ -360,33 +362,43 @@
     }
   }
 
-  function grade(totalDist) {
-    if (totalDist <= 10)  return '国宝級で賞';
-    if (totalDist <= 40)  return 'すばらしい芸術で賞';
-    if (totalDist <= 90)  return 'それっぽいで賞';
-    if (totalDist <= 160) return '未知の生命体で賞';
-    return 'トイレットペーパー級で賞';
+  // 評価
+  function gradeByOkCount(okCount) {
+    const map = {
+      1: 'トイレットペーパー級で賞',
+      2: 'もやし級で賞',
+      3: '未知の生命体で賞',
+      4: 'それっぽいで賞',
+      5: 'すばらしい芸術で賞',
+      6: '棒人間で賞',
+    };
+    return map[okCount] || '';
   }
-
+  
   function evaluate(showClear = false) {
-    let totalDist = 0;
     let okCount = 0;
 
     for (const def of partsDef) {
       const a = getAnchorWorld(def);
       const t = targets[def.id];
+      if (!t) continue; // 念のため（初期ロード直後の事故防止）
       const d = dist(a, t);
-      totalDist += d;
       if (d <= TOLERANCE) okCount++;
     }
 
     const isClear = okCount === partsDef.length;
-    const title = grade(totalDist);
-    msg.textContent = `判定OK: ${okCount}/${partsDef.length}　|　称号候補: ${title}`;
+    const title = gradeByOkCount(okCount); // ★これが必要
+
+    // 0/6 のときは称号を出さない
+    if (title) {
+      msg.textContent = `判定OK: ${okCount}/${partsDef.length}　|　${title}`;
+    } else {
+      msg.textContent = ``;
+    }
 
     if (isClear && showClear) {
       clearTitle.textContent = 'できた！！！！';
-      clearDesc.textContent = `称号：${title}（誤差合計 ${Math.round(totalDist)}px）`;
+      clearDesc.textContent = `称号：${title}`; // 6/6なので必ず入る
       overlay.classList.add('show');
     } else {
       overlay.classList.remove('show');
@@ -489,10 +501,13 @@
     refreshAll();
   });
 
-  document.getElementById('btnDebug').addEventListener('click', () => {
-    document.body.classList.toggle('debug');
-    refreshDots();
-  });
+  const btnDebug = document.getElementById('btnDebug');
+  if (btnDebug) {
+    btnDebug.addEventListener('click', () => {
+      document.body.classList.toggle('debug');
+      refreshDots();
+    });
+  }
 
   window.addEventListener('resize', () => {
     updatePartScale();
